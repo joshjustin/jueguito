@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Jueguito</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#e8f4ff;--ink:#0b2a4a;--card:#ffffff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1b2e;--ink:#e8f4ff;--card:#13304f}}
+:root[data-theme="dark"]{--bg:#0b1b2e;--ink:#e8f4ff;--card:#13304f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS",Verdana,sans-serif;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+h1{margin:4px 0 0;font-size:1.5rem;letter-spacing:.5px}
+#wrap{width:100%;max-width:720px;position:relative}
+[hidden]{display:none!important}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(11,42,74,.7);border-radius:12px;color:#fff;text-align:center;padding:12px}
+#ov h2{margin:0;font-size:2rem}
+#ov p{color:#fff}
+#pz{position:absolute;right:10px;bottom:10px;padding:6px 16px;font-size:.9rem;min-height:40px}
+canvas{width:100%;height:auto;display:block;border-radius:12px;background:#7ec8ff;touch-action:none}
+body{overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+button{min-height:44px;touch-action:manipulation}
+@media (max-width:600px){h1{font-size:1.2rem}p{font-size:.85rem}#ov h2{font-size:1.5rem}}
+p{margin:0;font-size:.95rem;text-align:center;max-width:60ch}
+button{font:inherit;padding:10px 22px;border-radius:999px;border:2px solid var(--ink);background:var(--card);color:var(--ink);cursor:pointer}
+button:focus-visible{outline:3px solid #ff9f1c;outline-offset:2px}
+</style>
+</head>
+<body>
+<h1>Jueguito</h1>
+<div id="wrap"><canvas id="c" width="720" height="360" aria-label="Juego de correr"></canvas>
+<button id="pz" hidden>Pausa</button>
+<div id="ov"><h2 id="ot">Jueguito</h2><p id="os">¿Podrás completar las frases?</p><button id="b1">Jugar</button><button id="b2" hidden>Menú</button></div></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d'),W=720,H=360,G=290;
+const phrases=['Eres muy hermosa','Tienes unos ojos muy hermosos','Tú siempre podrás','Qué bonita sonrisa tienes','Si caes te levanto, y sino caigo contigo','tu esfuerzo siempre valdra la pena','Eres especial','Brillas más que cualquier estrella','La grandeza nace de pequeños comienzos'];
+let msg='',mt=0,mi=0,goal=null;
+let st='menu',sc=0,rings=0,best=0,sp=6,t=0,obs=[],rg=[],hills=[],p;
+try{best=+localStorage.getItem('rayoBest')||0}catch(e){}
+function reset(){goal=null;msg='';mt=0;mi=0;p={x:110,y:G,vy:0,j:0};sc=0;rings=0;sp=6;t=0;obs=[];rg=[];
+ hills=[{x:80,r:90},{x:340,r:130},{x:620,r:100}]}
+const $=id=>document.getElementById(id);
+function showOv(t,sub,b1,menu){$('ot').textContent=t;$('os').textContent=sub;$('b1').textContent=b1;$('b2').hidden=!menu;$('ov').hidden=false;$('pz').hidden=true}
+function jump(){if(st==='play'&&p.j<2){p.vy=-12.5;p.j++}}
+function start(){reset();st='play';$('ov').hidden=true;$('pz').hidden=false}
+function pause(){
+ if(st==='play'){st='pause';showOv('Pausa','El juego está detenido.','Continuar',true)}
+ else if(st==='pause'){st='play';$('ov').hidden=true;$('pz').hidden=false}
+}
+function toMenu(){reset();st='menu';showOv('Jueguito','¿Podrás completar las frases?','Jugar',false)}
+addEventListener('keydown',e=>{
+ if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();if(st==='menu'||st==='over'||st==='win')start();else jump()}
+ else if(e.code==='KeyP'||e.code==='Escape')pause();
+});
+cv.addEventListener('pointerdown',e=>{e.preventDefault();jump()});
+$('pz').onclick=pause;
+$('b1').onclick=()=>{st==='pause'?pause():start()};
+$('b2').onclick=toMenu;
+function spawn(){
+ if(goal)return;
+ const gap=Math.max(260,520-sp*18);
+ const last=obs.length?obs[obs.length-1].x:0;
+ if(W-last>gap&&Math.random()<.04){obs.push({x:W+20,w:34,h:34})}
+ if(Math.random()<.03){const yy=G-30-Math.random()*90;for(let i=0;i<3;i++)rg.push({x:W+20+i*34,y:yy,got:false})}
+}
+function update(){
+ t++;if(!goal&&mi<phrases.length&&t%480===240){msg=phrases[mi++];mt=220}
+ if(!goal&&mi>=phrases.length&&mt===0)goal={x:W+60};
+ sc+=sp*.05;sp=Math.min(14,6+t/700);
+ p.vy+=.7;p.y+=p.vy;
+ if(p.y>=G){p.y=G;p.vy=0;p.j=0}
+ spawn();
+ obs.forEach(o=>o.x-=sp);rg.forEach(r=>r.x-=sp);hills.forEach(h=>h.x-=sp*.3);
+ hills.forEach(h=>{if(h.x<-150){h.x=W+120;h.r=80+Math.random()*60}});
+ if(goal){goal.x-=sp;if(goal.x<=p.x){win();return}}
+ obs=obs.filter(o=>o.x>-60);rg=rg.filter(r=>r.x>-30&&!r.got);
+ rg.forEach(r=>{if(Math.hypot(r.x-p.x,r.y-(p.y-22))<28){r.got=true;rings++;sc+=10}});
+ for(const o of obs){
+  if(p.x+16>o.x+6&&p.x-16<o.x+o.w-6&&p.y>G-o.h+6){die();return}
+ }
+}
+function win(){st='win';showOv('¡Ganaste!','Como ganaste, le puedes pedir cualquier cosa al creador','Jugar de nuevo',true);if(Math.floor(sc)>best){best=Math.floor(sc);try{localStorage.setItem('rayoBest',best)}catch(e){}}}
+function die(){st='over';showOv('Fin de la carrera','Puntos: '+Math.floor(sc)+' · Anillos: '+rings,'Jugar de nuevo',true);if(Math.floor(sc)>best){best=Math.floor(sc);try{localStorage.setItem('rayoBest',best)}catch(e){}}}
+function drawHero(){
+ const air=p.y<G;
+ x.save();x.translate(p.x,p.y-22);
+ if(air){x.rotate(t*.35);}
+ // púas traseras
+ x.fillStyle='#1b4fd8';
+ for(let i=0;i<3;i++){x.beginPath();x.moveTo(-14,-10+i*10);x.lineTo(-34,-14+i*12);x.lineTo(-14,-2+i*10);x.fill()}
+ // cuerpo
+ x.beginPath();x.arc(0,0,20,0,7);x.fill();
+ if(!air){
+  // cara
+  x.fillStyle='#f2c9a0';x.beginPath();x.ellipse(8,6,11,10,0,0,7);x.fill();
+  x.fillStyle='#fff';x.beginPath();x.ellipse(6,-6,8,9,0,0,7);x.ellipse(15,-6,7,9,0,0,7);x.fill();
+  x.fillStyle='#0b2a4a';x.beginPath();x.arc(9,-5,3,0,7);x.arc(17,-5,3,0,7);x.fill();
+  x.fillStyle='#e63946';x.beginPath();x.arc(20,3,3,0,7);x.fill();
+  // zapatos
+  const s=Math.sin(t*.5)*6;
+  x.fillStyle='#ff9f1c';x.fillRect(-10+s,17,16,8);x.fillRect(-4-s,17,16,8);
+ }
+ x.restore();
+}
+function draw(){
+ const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#5db8ff');g.addColorStop(1,'#d6efff');
+ x.fillStyle=g;x.fillRect(0,0,W,H);
+ x.fillStyle='#4fa86b';hills.forEach(h=>{x.beginPath();x.arc(h.x,G+10,h.r,Math.PI,0);x.fill()});
+ x.fillStyle='#8a5a2b';x.fillRect(0,G,W,H-G);
+ x.fillStyle='#3f9d4f';x.fillRect(0,G,W,10);
+ x.fillStyle='#6e451f';
+ for(let i=0;i<W/40+2;i++){const gx=((i*40-(t*sp)%40));x.fillRect(gx,G+26,18,6)}
+ // anillos
+ rg.forEach(r=>{x.strokeStyle='#ffc933';x.lineWidth=5;x.beginPath();x.arc(r.x,r.y,10,0,7);x.stroke()});
+ // púas
+ x.fillStyle='#5b6573';
+ obs.forEach(o=>{x.beginPath();x.moveTo(o.x,G);x.lineTo(o.x+o.w/2,G-o.h);x.lineTo(o.x+o.w,G);x.fill()});
+ if(goal){
+  x.fillStyle='#fff';x.fillRect(goal.x-3,G-130,6,130);
+  for(let a=0;a<4;a++)for(let b=0;b<6;b++){x.fillStyle=(a+b)%2?'#fff':'#0b2a4a';x.fillRect(goal.x+3+b*12,G-130+a*12,12,12)}
+ }
+ drawHero();
+ x.fillStyle='#0b2a4a';x.font='bold 18px Trebuchet MS, Verdana, sans-serif';x.textAlign='left';
+ x.fillText('Puntos '+Math.floor(sc),14,28);x.fillText('Anillos '+rings,14,52);
+ x.textAlign='right';x.fillText('Mejor '+best,W-14,28);
+ if(mt>0&&st==='play'){
+  mt--;const a=Math.min(1,mt/40,(220-mt)/30);
+  x.save();x.globalAlpha=Math.max(0,a);
+  x.font='bold 22px Trebuchet MS, Verdana, sans-serif';x.textAlign='center';
+  const w=x.measureText(msg).width+44;
+  x.fillStyle='#d9c8f7';x.beginPath();x.roundRect(W/2-w/2,64,w,44,22);x.fill();
+  x.fillStyle='#3b1f6e';x.fillText(msg,W/2,93);x.restore();
+ }
+}
+reset();
+(function loop(){if(st==='play')update();else if(st==='menu')t++;draw();requestAnimationFrame(loop)})();
+</script>
+</body>
+</html>
